@@ -1,6 +1,4 @@
 ﻿// See https://aka.ms/new-console-template for more information
-using Microsoft.VisualBasic.FileIO;
-using System.Reflection.Metadata.Ecma335;
 
 if (args.Length == 2)
 {
@@ -43,18 +41,6 @@ if (args.Length == 2)
 
         if (!File.Exists(targetFile))
         {
-            //try
-            //{
-            //    FileSystem.CopyFile(sourceFile, targetFile, UIOption.AllDialogs, UICancelOption.ThrowException);
-            //}
-            //catch(System.OperationCanceledException)
-            //{
-            //    if (File.Exists(targetFile))
-            //        FileSystem.DeleteFile(targetFile);
-            //    Console.WriteLine("Cancelled");
-            //    return;
-            //}
-
             File.Copy(sourceFile, targetFile, false);
 
             File.SetCreationTime(targetFile, creation);
