@@ -16,9 +16,10 @@ if (args.Length == 2)
     Console.WriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
 
     int n = 0;
+    long sessionBytes = 0;
     foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
     {
-        Thread.Sleep(10);
+        Thread.Sleep(100);
         n++;
         DateTime creation = File.GetCreationTime(sourceFile);
         DateTime lastWrite = File.GetLastWriteTime(sourceFile);
@@ -42,21 +43,25 @@ if (args.Length == 2)
 
         if (!File.Exists(targetFile))
         {
-            try
-            {
-                FileSystem.CopyFile(sourceFile, targetFile, UIOption.AllDialogs, UICancelOption.ThrowException);
-            }
-            catch(System.OperationCanceledException)
-            {
-                if (File.Exists(targetFile))
-                    FileSystem.DeleteFile(targetFile);
-                Console.WriteLine("Cancelled");
-                return;
-            }
+            //try
+            //{
+            //    FileSystem.CopyFile(sourceFile, targetFile, UIOption.AllDialogs, UICancelOption.ThrowException);
+            //}
+            //catch(System.OperationCanceledException)
+            //{
+            //    if (File.Exists(targetFile))
+            //        FileSystem.DeleteFile(targetFile);
+            //    Console.WriteLine("Cancelled");
+            //    return;
+            //}
+
+            File.Copy(sourceFile, targetFile, false);
+
             File.SetCreationTime(targetFile, creation);
             File.SetLastWriteTime(targetFile, lastWrite);
-
-            Console.WriteLine("copied");
+            long len = new FileInfo(targetFile).Length;
+            sessionBytes += len;
+            Console.WriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}");
         }
         else
         {
@@ -69,4 +74,16 @@ if (args.Length == 2)
 else
 {
     Console.WriteLine("Arguments: PhotoTransfer.exe source_dir target_dir");
+}
+
+
+static String BytesToString(long byteCount)
+{
+    string[] suf = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; //Longs run out around EB
+    if (byteCount == 0)
+        return "0" + suf[0];
+    long bytes = Math.Abs(byteCount);
+    int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
+    double num = Math.Round(bytes / Math.Pow(1024, place), 1);
+    return (Math.Sign(byteCount) * num).ToString() + suf[place];
 }
