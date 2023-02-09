@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PhotoTransfer": {
+      "commandName": "Project",
+      "commandLineArgs": "\"G:\\My Drive\\Google Photos\" \"Z:\\private\\Pictures\""
+    }
+  }
+}
