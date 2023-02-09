@@ -1,4 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
+using Microsoft.VisualBasic.FileIO;
 using System.Reflection.Metadata.Ecma335;
 
 if (args.Length == 2)
@@ -15,7 +16,7 @@ if (args.Length == 2)
     Console.WriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
 
     int n = 0;
-    foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", SearchOption.AllDirectories))
+    foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
     {
         Thread.Sleep(10);
         n++;
@@ -26,31 +27,40 @@ if (args.Length == 2)
         string d = creation.ToString("yyyy-MM-dd");
         string targetFileNameOnly = Path.GetFileName(sourceFile);
         string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
-        targetFileNameOnly = Path.Combine(targetDir , targetFileNameOnly);
+        string targetFile = Path.Combine(targetDir , targetFileNameOnly);
         
-        Console.Write($"Copying {n}: {sourceFile} to {targetFileNameOnly} ...");
+        Console.Write($"Copying {n}: {sourceFile} to {targetFile} ... ");
         
         if (targetFileNameOnly.StartsWith("."))
         {
-            Console.WriteLine(" skip");
+            Console.WriteLine("skip");
             continue;
         }
 
         if (!Directory.Exists(targetDir))
             Directory.CreateDirectory(targetDir);
 
-        if (!File.Exists(targetFileNameOnly))
+        if (!File.Exists(targetFile))
         {
-            File.Copy(sourceFile, targetFileNameOnly, false);
+            try
+            {
+                FileSystem.CopyFile(sourceFile, targetFile, UIOption.AllDialogs, UICancelOption.ThrowException);
+            }
+            catch(System.OperationCanceledException)
+            {
+                if (File.Exists(targetFile))
+                    FileSystem.DeleteFile(targetFile);
+                Console.WriteLine("Cancelled");
+                return;
+            }
+            File.SetCreationTime(targetFile, creation);
+            File.SetLastWriteTime(targetFile, lastWrite);
 
-            File.SetCreationTime(targetFileNameOnly, creation);
-            File.SetLastWriteTime(targetFileNameOnly, lastWrite);
-
-            Console.WriteLine(" copied");
+            Console.WriteLine("copied");
         }
         else
         {
-            Console.WriteLine(" exist");
+            Console.WriteLine("exist");
         }
         
     }
