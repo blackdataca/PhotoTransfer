@@ -17,7 +17,7 @@ if (args.Length == 2)
     long sessionBytes = 0;
     foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
     {
-        Thread.Sleep(100);
+        Thread.Sleep(10);
         n++;
         DateTime creation = File.GetCreationTime(sourceFile);
         DateTime lastWrite = File.GetLastWriteTime(sourceFile);
