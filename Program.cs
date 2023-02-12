@@ -14,10 +14,11 @@ if (args.Length == 2)
     Console.WriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
 
     int n = 0;
+    int total = 0;
     long sessionBytes = 0;
     foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
     {
-        Thread.Sleep(10);
+        Thread.Sleep(1);
         n++;
         DateTime creation = File.GetCreationTime(sourceFile);
         DateTime lastWrite = File.GetLastWriteTime(sourceFile);
@@ -48,6 +49,7 @@ if (args.Length == 2)
             long len = new FileInfo(targetFile).Length;
             sessionBytes += len;
             Console.WriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}");
+            total++;
         }
         else
         {
@@ -55,6 +57,7 @@ if (args.Length == 2)
         }
         
     }
+    Console.WriteLine($"Total {total:N0} files, {BytesToString(sessionBytes)} transferred");
 
 }
 else
