@@ -1,5 +1,9 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
+using System.Reflection;
+
+ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
+
 if (args.Length == 2)
 {
     string sourceRoot = args[0];
@@ -8,14 +12,15 @@ if (args.Length == 2)
         targetRoot+= Path.DirectorySeparatorChar;
     if (!Directory.Exists(targetRoot))
     {
-        Console.WriteLine($"target_dir does not exist: {targetRoot}");
+        ConsoleWriteLine($"target_dir does not exist: {targetRoot}");
         return;
     }
-    Console.WriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
+    ConsoleWriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
 
     int n = 0;
     int total = 0;
     long sessionBytes = 0;
+
     foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
     {
         Thread.Sleep(1);
@@ -28,43 +33,68 @@ if (args.Length == 2)
         string targetFileNameOnly = Path.GetFileName(sourceFile);
         string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
         string targetFile = Path.Combine(targetDir , targetFileNameOnly);
-        
-        Console.Write($"Copying {n}: {sourceFile} to {targetFile} ... ");
+        long sourceLen = new FileInfo(sourceFile).Length;
+
+
+        ConsoleWrite($"Copying {n}: {sourceFile} ({BytesToString(sourceLen)}) to {targetFile} ");
         
         if (targetFileNameOnly.StartsWith("."))
         {
-            Console.WriteLine("skip");
+            ConsoleWriteLine("skip", true);
             continue;
         }
 
         if (!Directory.Exists(targetDir))
             Directory.CreateDirectory(targetDir);
 
+        if (File.Exists(targetFile))
+        {
+            long targetLen = new FileInfo(targetFile).Length;
+            ConsoleWrite($"({BytesToString(targetLen)}) ", true);
+            if (targetLen < sourceLen)
+                File.Delete(targetFile);
+        }
+
+
         if (!File.Exists(targetFile))
         {
+            ConsoleWrite("...", true);
             File.Copy(sourceFile, targetFile, false);
 
             File.SetCreationTime(targetFile, creation);
             File.SetLastWriteTime(targetFile, lastWrite);
             long len = new FileInfo(targetFile).Length;
             sessionBytes += len;
-            Console.WriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}");
+            ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true);
             total++;
         }
         else
         {
-            Console.WriteLine("exist");
+            ConsoleWriteLine("exist", true);
         }
         
     }
-    Console.WriteLine($"Total {total:N0} files, {BytesToString(sessionBytes)} transferred");
+    ConsoleWriteLine($"Total {total:N0} files, {BytesToString(sessionBytes)} transferred");
 
 }
 else
 {
-    Console.WriteLine("Arguments: PhotoTransfer.exe source_dir target_dir");
+    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir");
 }
 
+static void ConsoleWriteLine(string message, bool omitDate = false)
+{
+    if (!omitDate)
+        Console.Write(DateTime.Now + " ");
+    Console.WriteLine(message);
+}
+
+static void ConsoleWrite(string message, bool omitDate = false)
+{
+    if (!omitDate)
+        Console.Write(DateTime.Now + " ");
+    Console.Write(message);
+}
 
 static String BytesToString(long byteCount)
 {
