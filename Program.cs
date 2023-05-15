@@ -53,6 +53,11 @@ if (args.Length == 2)
             ConsoleWrite($"({BytesToString(targetLen)}) ", true);
             if (targetLen < sourceLen)
                 File.Delete(targetFile);
+            else
+            {
+                if (File.GetCreationTime(targetFile).Date == DateTime.Now.Date)
+                    File.Delete(targetFile);
+            }
         }
 
 
