@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Reflection;
+using System.Text;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
 
@@ -20,8 +21,8 @@ if (args.Length == 2)
     int n = 0;
     int total = 0;
     long sessionBytes = 0;
-
-    foreach (var sourceFile in Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories))
+    string[] allFiles = Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories);
+    foreach (var sourceFile in allFiles)
     {
         Thread.Sleep(1);
         n++;
@@ -36,7 +37,7 @@ if (args.Length == 2)
         long sourceLen = new FileInfo(sourceFile).Length;
 
 
-        ConsoleWrite($"Copying {n}: {sourceFile} ({BytesToString(sourceLen)}) to {targetFile} ");
+        ConsoleWrite($"Copying {n}/{allFiles.Length}: {sourceFile} ({BytesToString(sourceLen)}) to {targetFile} ");
         
         if (targetFileNameOnly.StartsWith("."))
         {
@@ -64,7 +65,50 @@ if (args.Length == 2)
         if (!File.Exists(targetFile))
         {
             ConsoleWrite("...", true);
-            File.Copy(sourceFile, targetFile, false);
+
+            //File.Copy(sourceFile, targetFile, false);
+            byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+            using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
+            {
+                //long fileLength = source.Length;
+                using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
+                {
+                    long totalBytes = 0;
+                    int currentBlockSize = 0;
+                    //int lastPer = 0;
+                    var start = DateTime.Now;
+                    while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        dest.Write(buffer, 0, currentBlockSize);
+
+                        totalBytes += currentBlockSize;
+                        int percentage = (int)(totalBytes * 100 / sourceLen);
+
+                        //if (percentage != lastPer)
+                        //{
+                            //lastPer = percentage;
+                            var totalSeconds = DateTime.Now - start;
+                            int eta = 0; //seconds
+                            if (totalSeconds.TotalSeconds != 0)
+                            {
+                                var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
+                                var remaind = sourceLen - totalBytes;
+                                eta = (int) (remaind / speed);
+
+                            }
+                            string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
+                            StringBuilder bs = new StringBuilder();
+                            for (int i = 0; i < per.Length; i++)
+                                bs.Append("\b");
+                            ConsoleWrite($"{per}{bs}", true);
+                            Thread.Sleep(1);
+                        //}
+                        
+
+                    }
+                }
+            }
+            
 
             File.SetCreationTime(targetFile, creation);
             File.SetLastWriteTime(targetFile, lastWrite);
@@ -101,6 +145,17 @@ static void ConsoleWrite(string message, bool omitDate = false)
     Console.Write(message);
 }
 
+static string HumanTime(double seconds)
+{
+    TimeSpan t = TimeSpan.FromSeconds(seconds);
+    var sb = new StringBuilder();
+    if (t.Hours > 0)
+        sb.Append(t.Hours).Append("h");
+    if (t.Minutes > 0)
+        sb.Append(t.Minutes).Append("m");
+    sb.Append(t.Seconds).Append("s");
+    return sb.ToString();
+}
 static String BytesToString(long byteCount)
 {
     string[] suf = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; //Longs run out around EB
