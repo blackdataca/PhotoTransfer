@@ -30,7 +30,7 @@ if (args.Length == 2)
         DateTime lastWrite = File.GetLastWriteTime(sourceFile);
         string y = creation.ToString("yyyy");
         string m = creation.ToString("MM");
-        string d = creation.ToString("yyyy-MM-dd");
+        string d = creation.ToString("yyyy_MM_dd");
         string targetFileNameOnly = Path.GetFileName(sourceFile);
         string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
         string targetFile = Path.Combine(targetDir , targetFileNameOnly);
