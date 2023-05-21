@@ -199,7 +199,7 @@ if (args.Length == 3)
 }
 else
 {
-    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir");
+    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir if_Delete_Source");
 }
 
 static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor color= ConsoleColor.Gray)
