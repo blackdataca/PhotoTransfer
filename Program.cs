@@ -24,28 +24,51 @@ if (args.Length == 2)
         return;
     }
     ConsoleWriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
+    Console.TreatControlCAsInput = true;
 
     int n = 0;
     int total = 0;
+    int skipped = 0;
     long sessionBytes = 0;
     string[] allFiles = Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories);
     foreach (var sourceFile in allFiles)
     {
+        n++;
         Thread.Sleep(1);
+        if (Console.KeyAvailable)
+        {
+            var keyPressed = Console.ReadKey();
+            if (keyPressed.Key == ConsoleKey.Escape || keyPressed.Modifiers == ConsoleModifiers.Control && keyPressed.Key == ConsoleKey.C)
+            {
+                break;
+            }
+        }
         string? p = Path.GetDirectoryName(sourceFile);
         if (p == null || p.EndsWith("Trash"))
+        {
+            ConsoleWriteLine("source file deleted. skip", true);
+            skipped++;
             continue;
+        }
         if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
             || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
             )
         {
-            n++;
             
             ConsoleWrite($"Copying {n}/{allFiles.Length}: {sourceFile} ");
             long sourceLen = new FileInfo(sourceFile).Length;
             ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
 
             DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
+            if (creation == DateTime.MinValue)
+            {
+                ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Yellow);
+                skipped++;
+                continue;
+            }
             DateTime lastWrite = File.GetLastWriteTime(sourceFile);
             string y = creation.ToString("yyyy");
             string m = creation.ToString("MM");
@@ -60,7 +83,8 @@ if (args.Length == 2)
 
             if (targetFileNameOnly.StartsWith("."))
             {
-                ConsoleWriteLine("skip", true);
+                ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
+                skipped++;
                 continue;
             }
 
@@ -133,16 +157,22 @@ if (args.Length == 2)
                 File.SetLastWriteTime(targetFile, lastWrite);
                 long len = new FileInfo(targetFile).Length;
                 sessionBytes += len;
-                ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true);
+                ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
                 total++;
             }
             else
             {
-                ConsoleWriteLine("exist", true);
+                ConsoleWriteLine("exist", true, ConsoleColor.Yellow);
+                skipped++;
             }
         }
+        else
+        {
+            ConsoleWriteLine($"Skip {n}/{allFiles.Length}: {sourceFile}", false, ConsoleColor.Yellow);
+            skipped++;
+        }
     }
-    ConsoleWriteLine($"Total {total:N0} files, {BytesToString(sessionBytes)} transferred");
+    ConsoleWriteLine($"Copied {total:N0} files, skipped {skipped:N0} files, {BytesToString(sessionBytes)} transferred", false, ConsoleColor.White);
 
 }
 else
@@ -156,11 +186,11 @@ static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor
     if (!omitDate)
         Console.Write(DateTime.Now + " ");
     Console.WriteLine(message);
-    
 }
 
 static void ConsoleWrite(string message, bool omitDate = false)
 {
+    Console.ForegroundColor = ConsoleColor.Gray;
     if (!omitDate)
         Console.Write(DateTime.Now + " ");
     Console.Write(message);
@@ -238,10 +268,27 @@ static DateTime GetDateTakenFromImage(string path)
 
 static DateTime DateFromJson(string path)
 {
-    string json = File.ReadAllText(path + ".json");
-    dynamic data = JObject.Parse(json);
-    double timeStamp = data.photoTakenTime.timestamp;
-    return UnixTimeStampToDateTime(timeStamp);
+    string jsonFile = path + ".json";
+    if (File.Exists(jsonFile))
+    {
+        string json = File.ReadAllText(jsonFile);
+
+        dynamic data = JObject.Parse(json);
+        double timeStamp = data.photoTakenTime.timestamp;
+        return UnixTimeStampToDateTime(timeStamp);
+    }
+    jsonFile = Path.Combine(Path.GetDirectoryName(path), "metadata.json");
+    if (File.Exists(jsonFile))
+    {
+       
+        string json = File.ReadAllText(jsonFile);
+
+        dynamic data = JObject.Parse(json);
+        double timeStamp = data.date.timestamp;
+        return UnixTimeStampToDateTime(timeStamp);
+    }
+
+    return DateTime.MinValue;
 }
 
 static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
