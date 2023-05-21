@@ -60,8 +60,11 @@ if (args.Length == 3)
             || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
             )
         {
-            
-            ConsoleWrite($"Copying {n}/{allFiles.Length}: {sourceFile} ");
+            if (deleteSource)
+                ConsoleWrite("Moving");
+            else
+                ConsoleWrite("Copying");
+            ConsoleWrite($" {n}/{allFiles.Length}: {sourceFile} ", true);
             long sourceLen = new FileInfo(sourceFile).Length;
             ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
 
@@ -266,7 +269,9 @@ static DateTime GetDateTakenFromImage(string path)
                     if (propItem == null || propItem.Value == null)
                         return DateFromJson(path);
                     string dateTaken = Encoding.ASCII.GetString(propItem.Value);
+                    dateTaken = dateTaken.Replace("?", "");
                     dateTaken = dateTaken.Trim('\0').Trim();
+                    
                     if (Regex.Match(dateTaken, @"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
                         return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
                     else if (Regex.Match(dateTaken, @"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").Success)
