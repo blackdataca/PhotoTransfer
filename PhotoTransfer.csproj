@@ -5,6 +5,7 @@
     <TargetFramework>net6.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <BaseOutputPath>C:\Users\user202212\Resilio Sync\Pictures\PhotoTransfer</BaseOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

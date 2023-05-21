@@ -55,6 +55,7 @@ if (args.Length == 2)
             || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
             || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
             || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
             )
         {
             
@@ -65,9 +66,13 @@ if (args.Length == 2)
             DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
             if (creation == DateTime.MinValue)
             {
-                ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Yellow);
-                skipped++;
-                continue;
+                creation = File.GetCreationTime(sourceFile);
+                if (creation > DateTime.Now.AddDays(-1))
+                {
+                    ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Yellow);
+                    skipped++;
+                    continue;
+                }
             }
             DateTime lastWrite = File.GetLastWriteTime(sourceFile);
             string y = creation.ToString("yyyy");
@@ -266,9 +271,9 @@ static DateTime GetDateTakenFromImage(string path)
     
 }
 
-static DateTime DateFromJson(string path)
+static DateTime DateFromJson(string file)
 {
-    string jsonFile = path + ".json";
+    string jsonFile = file + ".json";
     if (File.Exists(jsonFile))
     {
         string json = File.ReadAllText(jsonFile);
@@ -277,17 +282,34 @@ static DateTime DateFromJson(string path)
         double timeStamp = data.photoTakenTime.timestamp;
         return UnixTimeStampToDateTime(timeStamp);
     }
-    jsonFile = Path.Combine(Path.GetDirectoryName(path), "metadata.json");
+    string? spath = Path.GetDirectoryName(file);
+    if (spath == null)
+        return DateTime.MinValue;
+
+    if (Path.GetFileNameWithoutExtension(file).EndsWith("(1)"))
+    {
+        jsonFile = Path.Combine(spath, Path.GetFileNameWithoutExtension(file).Replace("(1)", "") + Path.GetExtension(file) + "(1)" + ".json");
+        if (File.Exists(jsonFile))
+        {
+            string json = File.ReadAllText(jsonFile);
+
+            dynamic data = JObject.Parse(json);
+            double timeStamp = data.photoTakenTime.timestamp;
+            return UnixTimeStampToDateTime(timeStamp);
+        }
+    }
+
+
+    jsonFile = Path.Combine(spath, "metadata.json");
     if (File.Exists(jsonFile))
     {
-       
+
         string json = File.ReadAllText(jsonFile);
 
         dynamic data = JObject.Parse(json);
         double timeStamp = data.date.timestamp;
         return UnixTimeStampToDateTime(timeStamp);
     }
-
     return DateTime.MinValue;
 }
 
