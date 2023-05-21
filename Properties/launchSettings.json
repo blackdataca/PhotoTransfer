@@ -2,7 +2,7 @@
   "profiles": {
     "PhotoTransfer": {
       "commandName": "Project",
-      "commandLineArgs": " Z:\\private\\Videos Z:\\private\\Pictures"
+      "commandLineArgs": "\"C:\\Users\\user202212\\Downloads\\Takeout\\Google Photos\" Z:\\private\\Pictures"
     }
   }
 }

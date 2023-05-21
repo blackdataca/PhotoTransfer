@@ -2,6 +2,13 @@
 
 using System.Reflection;
 using System.Text;
+using static System.Net.Mime.MediaTypeNames;
+using System.Text.RegularExpressions;
+using System.Drawing.Imaging;
+using Microsoft.WindowsAPICodePack.Shell;
+using System.Globalization;
+using System.Linq.Expressions;
+using Newtonsoft.Json.Linq;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
 
@@ -25,67 +32,79 @@ if (args.Length == 2)
     foreach (var sourceFile in allFiles)
     {
         Thread.Sleep(1);
-        n++;
-        DateTime creation = File.GetCreationTime(sourceFile);
-        DateTime lastWrite = File.GetLastWriteTime(sourceFile);
-        string y = creation.ToString("yyyy");
-        string m = creation.ToString("MM");
-        string d = creation.ToString("yyyy_MM_dd");
-        string targetFileNameOnly = Path.GetFileName(sourceFile);
-        string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
-        string targetFile = Path.Combine(targetDir , targetFileNameOnly);
-        long sourceLen = new FileInfo(sourceFile).Length;
-
-
-        ConsoleWrite($"Copying {n}/{allFiles.Length}: {sourceFile} ({BytesToString(sourceLen)}) to {targetFile} ");
-        
-        if (targetFileNameOnly.StartsWith("."))
-        {
-            ConsoleWriteLine("skip", true);
+        string? p = Path.GetDirectoryName(sourceFile);
+        if (p == null || p.EndsWith("Trash"))
             continue;
-        }
-
-        if (!Directory.Exists(targetDir))
-            Directory.CreateDirectory(targetDir);
-
-        if (File.Exists(targetFile))
+        if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+            )
         {
-            long targetLen = new FileInfo(targetFile).Length;
-            ConsoleWrite($"({BytesToString(targetLen)}) ", true);
-            if (targetLen < sourceLen)
-                File.Delete(targetFile);
-            else
+            n++;
+            
+            ConsoleWrite($"Copying {n}/{allFiles.Length}: {sourceFile} ");
+            long sourceLen = new FileInfo(sourceFile).Length;
+            ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
+
+            DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
+            DateTime lastWrite = File.GetLastWriteTime(sourceFile);
+            string y = creation.ToString("yyyy");
+            string m = creation.ToString("MM");
+            string d = creation.ToString("yyyy_MM_dd");
+            string targetFileNameOnly = Path.GetFileName(sourceFile);
+            string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
+            string targetFile = Path.Combine(targetDir, targetFileNameOnly);
+            
+
+
+            ConsoleWrite($"to {targetFile} ", true);
+
+            if (targetFileNameOnly.StartsWith("."))
             {
-                if (File.GetCreationTime(targetFile).Date == DateTime.Now.Date)
-                    File.Delete(targetFile);
+                ConsoleWriteLine("skip", true);
+                continue;
             }
-        }
 
+            if (!Directory.Exists(targetDir))
+                Directory.CreateDirectory(targetDir);
 
-        if (!File.Exists(targetFile))
-        {
-            ConsoleWrite("...", true);
-
-            //File.Copy(sourceFile, targetFile, false);
-            byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
-            using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
+            if (File.Exists(targetFile))
             {
-                //long fileLength = source.Length;
-                using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
+                long targetLen = new FileInfo(targetFile).Length;
+                ConsoleWrite($"({BytesToString(targetLen)}) ", true);
+                if (targetLen < sourceLen)
+                    File.Delete(targetFile);
+                else
                 {
-                    long totalBytes = 0;
-                    int currentBlockSize = 0;
-                    //int lastPer = 0;
-                    var start = DateTime.Now;
-                    while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
+                    if (File.GetCreationTime(targetFile).Date == DateTime.Now.Date)
+                        File.Delete(targetFile);
+                }
+            }
+
+
+            if (!File.Exists(targetFile))
+            {
+                ConsoleWrite("...", true);
+
+                //File.Copy(sourceFile, targetFile, false);
+                byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+                using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
+                {
+                    //long fileLength = source.Length;
+                    using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
                     {
-                        dest.Write(buffer, 0, currentBlockSize);
+                        long totalBytes = 0;
+                        int currentBlockSize = 0;
+                        //int lastPer = 0;
+                        var start = DateTime.Now;
+                        while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            dest.Write(buffer, 0, currentBlockSize);
 
-                        totalBytes += currentBlockSize;
-                        int percentage = (int)(totalBytes * 100 / sourceLen);
+                            totalBytes += currentBlockSize;
+                            int percentage = (int)(totalBytes * 100 / sourceLen);
 
-                        //if (percentage != lastPer)
-                        //{
+                            //if (percentage != lastPer)
+                            //{
                             //lastPer = percentage;
                             var totalSeconds = DateTime.Now - start;
                             int eta = 0; //seconds
@@ -93,7 +112,7 @@ if (args.Length == 2)
                             {
                                 var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
                                 var remaind = sourceLen - totalBytes;
-                                eta = (int) (remaind / speed);
+                                eta = (int)(remaind / speed);
 
                             }
                             string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
@@ -102,26 +121,26 @@ if (args.Length == 2)
                                 bs.Append("\b");
                             ConsoleWrite($"{per}{bs}", true);
                             Thread.Sleep(1);
-                        //}
-                        
+                            //}
 
+
+                        }
                     }
                 }
-            }
-            
 
-            File.SetCreationTime(targetFile, creation);
-            File.SetLastWriteTime(targetFile, lastWrite);
-            long len = new FileInfo(targetFile).Length;
-            sessionBytes += len;
-            ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true);
-            total++;
+
+                File.SetCreationTime(targetFile, creation);
+                File.SetLastWriteTime(targetFile, lastWrite);
+                long len = new FileInfo(targetFile).Length;
+                sessionBytes += len;
+                ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true);
+                total++;
+            }
+            else
+            {
+                ConsoleWriteLine("exist", true);
+            }
         }
-        else
-        {
-            ConsoleWriteLine("exist", true);
-        }
-        
     }
     ConsoleWriteLine($"Total {total:N0} files, {BytesToString(sessionBytes)} transferred");
 
@@ -131,11 +150,13 @@ else
     ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir");
 }
 
-static void ConsoleWriteLine(string message, bool omitDate = false)
+static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor color= ConsoleColor.Gray)
 {
+    Console.ForegroundColor = color;
     if (!omitDate)
         Console.Write(DateTime.Now + " ");
     Console.WriteLine(message);
+    
 }
 
 static void ConsoleWrite(string message, bool omitDate = false)
@@ -165,4 +186,68 @@ static String BytesToString(long byteCount)
     int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
     double num = Math.Round(bytes / Math.Pow(1024, place), 1);
     return (Math.Sign(byteCount) * num).ToString() + suf[place];
+}
+
+
+//retrieves the datetime WITHOUT loading the whole image
+static DateTime GetDateTakenFromImage(string path)
+{
+    try
+    {
+        if (path.EndsWith(".mp4"))
+        {
+            using (ShellObject shell = ShellObject.FromParsingName(path))
+            {
+                var v = shell.Properties.System.Media.DateEncoded.Value;
+                if (v == null)
+                    return DateFromJson(path);
+                DateTime datetime = v.Value;
+                return datetime;
+            }
+
+        }
+        else
+        {
+
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+            {
+                using (var myImage = System.Drawing.Image.FromStream(fs, false, false))
+                {
+                    PropertyItem? propItem = myImage.GetPropertyItem(36867);
+                    if (propItem == null || propItem.Value == null)
+                        return DateFromJson(path);
+                    string dateTaken = Encoding.ASCII.GetString(propItem.Value);
+                    return DateTime.ParseExact(dateTaken.Trim('\0'), "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
+                }
+            }
+
+        }
+    }
+    catch (System.ArgumentException ex)
+    {
+        if (ex.Message == "Property cannot be found." || ex.Message == "Parameter is not valid.")
+        {
+            return DateFromJson(path);
+        }
+        else
+            throw ex;
+    }
+
+    
+}
+
+static DateTime DateFromJson(string path)
+{
+    string json = File.ReadAllText(path + ".json");
+    dynamic data = JObject.Parse(json);
+    double timeStamp = data.photoTakenTime.timestamp;
+    return UnixTimeStampToDateTime(timeStamp);
+}
+
+static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+{
+    // Unix timestamp is seconds past epoch
+    DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+    dateTime = dateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+    return dateTime;
 }
