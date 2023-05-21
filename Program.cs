@@ -252,7 +252,13 @@ static DateTime GetDateTakenFromImage(string path)
                     if (propItem == null || propItem.Value == null)
                         return DateFromJson(path);
                     string dateTaken = Encoding.ASCII.GetString(propItem.Value);
-                    return DateTime.ParseExact(dateTaken.Trim('\0'), "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    dateTaken = dateTaken.Trim('\0');
+                    if (Regex.Match(dateTaken, @"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
+                        return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    else if (Regex.Match(dateTaken, @"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").Success)
+                        return DateTime.ParseExact(dateTaken, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    else
+                        return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
                 }
             }
 
