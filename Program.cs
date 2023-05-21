@@ -12,10 +12,12 @@ using Newtonsoft.Json.Linq;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
 
-if (args.Length == 2)
+if (args.Length == 3)
 {
     string sourceRoot = args[0];
     string targetRoot = args[1];
+    bool deleteSource = bool.Parse(args[2]);
+
     if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
         targetRoot+= Path.DirectorySeparatorChar;
     if (!Directory.Exists(targetRoot))
@@ -114,55 +116,67 @@ if (args.Length == 2)
             {
                 ConsoleWrite("...", true);
 
-                //File.Copy(sourceFile, targetFile, false);
-                byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
-                using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
+
+                if (deleteSource && sourceFile.Substring(0, 2) == targetFile.Substring(0, 2))
+                    File.Move(sourceFile, targetFile, false);
+                else
                 {
-                    //long fileLength = source.Length;
-                    using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+                    using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
                     {
-                        long totalBytes = 0;
-                        int currentBlockSize = 0;
-                        //int lastPer = 0;
-                        var start = DateTime.Now;
-                        while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
+                        //long fileLength = source.Length;
+                        using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
                         {
-                            dest.Write(buffer, 0, currentBlockSize);
-
-                            totalBytes += currentBlockSize;
-                            int percentage = (int)(totalBytes * 100 / sourceLen);
-
-                            //if (percentage != lastPer)
-                            //{
-                            //lastPer = percentage;
-                            var totalSeconds = DateTime.Now - start;
-                            int eta = 0; //seconds
-                            if (totalSeconds.TotalSeconds != 0)
+                            long totalBytes = 0;
+                            int currentBlockSize = 0;
+                            //int lastPer = 0;
+                            var start = DateTime.Now;
+                            while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
                             {
-                                var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
-                                var remaind = sourceLen - totalBytes;
-                                eta = (int)(remaind / speed);
+                                dest.Write(buffer, 0, currentBlockSize);
+
+                                totalBytes += currentBlockSize;
+                                int percentage = (int)(totalBytes * 100 / sourceLen);
+
+                                //if (percentage != lastPer)
+                                //{
+                                //lastPer = percentage;
+                                var totalSeconds = DateTime.Now - start;
+                                int eta = 0; //seconds
+                                if (totalSeconds.TotalSeconds != 0)
+                                {
+                                    var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
+                                    var remaind = sourceLen - totalBytes;
+                                    eta = (int)(remaind / speed);
+
+                                }
+                                string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
+                                StringBuilder bs = new StringBuilder();
+                                for (int i = 0; i < per.Length; i++)
+                                    bs.Append("\b");
+                                ConsoleWrite($"{per}{bs}", true);
+                                Thread.Sleep(1);
+                                //}
+
 
                             }
-                            string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
-                            StringBuilder bs = new StringBuilder();
-                            for (int i = 0; i < per.Length; i++)
-                                bs.Append("\b");
-                            ConsoleWrite($"{per}{bs}", true);
-                            Thread.Sleep(1);
-                            //}
-
-
                         }
                     }
+
+
+                    File.SetCreationTime(targetFile, creation);
+                    File.SetLastWriteTime(targetFile, lastWrite);
+
+                    if (deleteSource)
+                        File.Delete(sourceFile);
                 }
-
-
-                File.SetCreationTime(targetFile, creation);
-                File.SetLastWriteTime(targetFile, lastWrite);
                 long len = new FileInfo(targetFile).Length;
                 sessionBytes += len;
-                ConsoleWriteLine($"copied {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
+                if (deleteSource)
+                    ConsoleWrite("moved", true, ConsoleColor.Green);
+                else
+                    ConsoleWrite("copied", true, ConsoleColor.Green);
+                ConsoleWriteLine($" {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
                 total++;
             }
             else
@@ -193,9 +207,9 @@ static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor
     Console.WriteLine(message);
 }
 
-static void ConsoleWrite(string message, bool omitDate = false)
+static void ConsoleWrite(string message, bool omitDate = false, ConsoleColor color = ConsoleColor.Gray)
 {
-    Console.ForegroundColor = ConsoleColor.Gray;
+    Console.ForegroundColor = color;
     if (!omitDate)
         Console.Write(DateTime.Now + " ");
     Console.Write(message);
@@ -252,7 +266,7 @@ static DateTime GetDateTakenFromImage(string path)
                     if (propItem == null || propItem.Value == null)
                         return DateFromJson(path);
                     string dateTaken = Encoding.ASCII.GetString(propItem.Value);
-                    dateTaken = dateTaken.Trim('\0');
+                    dateTaken = dateTaken.Trim('\0').Trim();
                     if (Regex.Match(dateTaken, @"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
                         return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
                     else if (Regex.Match(dateTaken, @"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").Success)
