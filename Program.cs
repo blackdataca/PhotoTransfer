@@ -9,6 +9,8 @@ using Microsoft.WindowsAPICodePack.Shell;
 using System.Globalization;
 using System.Linq.Expressions;
 using Newtonsoft.Json.Linq;
+using System.Drawing;
+using System.Windows.Media.Imaging;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
 
@@ -48,7 +50,7 @@ if (args.Length == 3)
         string? p = Path.GetDirectoryName(sourceFile);
         if (p == null || p.EndsWith("Trash"))
         {
-            ConsoleWriteLine("source file deleted. skip", true);
+            //ConsoleWriteLine("source file deleted. skip", true);
             skipped++;
             continue;
         }
@@ -58,6 +60,10 @@ if (args.Length == 3)
             || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
             || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
             || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".heic", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || sourceFile.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
             )
         {
             if (deleteSource)
@@ -71,13 +77,13 @@ if (args.Length == 3)
             DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
             if (creation == DateTime.MinValue)
             {
-                creation = File.GetCreationTime(sourceFile);
-                if (creation > DateTime.Now.AddDays(-1))
-                {
-                    ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Yellow);
+                //creation = File.GetCreationTime(sourceFile);
+                //if (creation > DateTime.Now.AddDays(-1))
+                //{
+                    ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Red);
                     skipped++;
                     continue;
-                }
+                //}
             }
             DateTime lastWrite = File.GetLastWriteTime(sourceFile);
             string y = creation.ToString("yyyy");
@@ -120,7 +126,7 @@ if (args.Length == 3)
                 ConsoleWrite("...", true);
 
 
-                if (deleteSource && sourceFile.Substring(0, 2) == targetFile.Substring(0, 2))
+                if (deleteSource && sourceFile.Substring(0, 2).Equals(targetFile.Substring(0, 2), StringComparison.OrdinalIgnoreCase))
                     File.Move(sourceFile, targetFile, false);
                 else
                 {
@@ -166,13 +172,12 @@ if (args.Length == 3)
                         }
                     }
 
-
-                    File.SetCreationTime(targetFile, creation);
-                    File.SetLastWriteTime(targetFile, lastWrite);
-
                     if (deleteSource)
                         File.Delete(sourceFile);
                 }
+                File.SetCreationTime(targetFile, creation);
+                File.SetLastWriteTime(targetFile, lastWrite);
+
                 long len = new FileInfo(targetFile).Length;
                 sessionBytes += len;
                 if (deleteSource)
@@ -185,12 +190,16 @@ if (args.Length == 3)
             else
             {
                 ConsoleWriteLine("exist", true, ConsoleColor.Yellow);
+                if (deleteSource)
+                {
+                    File.Delete(sourceFile);
+                }
                 skipped++;
             }
         }
         else
         {
-            ConsoleWriteLine($"Skip {n}/{allFiles.Length}: {sourceFile}", false, ConsoleColor.Yellow);
+            //ConsoleWriteLine($"Skip {n}/{allFiles.Length}: {sourceFile}", false, ConsoleColor.Yellow);
             skipped++;
         }
     }
@@ -241,20 +250,30 @@ static String BytesToString(long byteCount)
 }
 
 
-//retrieves the datetime WITHOUT loading the whole image
 static DateTime GetDateTakenFromImage(string path)
 {
     try
     {
-        if (path.EndsWith(".mp4"))
+        if (path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) 
+            || path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
+             || path.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
+            )
         {
             using (ShellObject shell = ShellObject.FromParsingName(path))
             {
                 var v = shell.Properties.System.Media.DateEncoded.Value;
                 if (v == null)
-                    return DateFromJson(path);
-                DateTime datetime = v.Value;
-                return datetime;
+                {
+                    //return DateFromJson(path);
+                    //ConsoleWriteLine("Error reading date", true, ConsoleColor.Red);
+                    return DateTime.MinValue;
+                }
+                else
+                {
+                    DateTime datetime = v.Value;
+                    return datetime;
+                }
             }
 
         }
@@ -271,10 +290,15 @@ static DateTime GetDateTakenFromImage(string path)
                     string dateTaken = Encoding.ASCII.GetString(propItem.Value);
                     dateTaken = dateTaken.Replace("?", "");
                     dateTaken = dateTaken.Trim('\0').Trim();
-                    
-                    if (Regex.Match(dateTaken, @"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
-                        return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
-                    else if (Regex.Match(dateTaken, @"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").Success)
+
+                    if (Regex.Match(dateTaken, @"^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
+                    {
+                        var regex = new Regex(Regex.Escape(":"));
+                        dateTaken = regex.Replace(dateTaken, "-", 2);
+                        return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
+                        //return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    }
+                    else if (Regex.Match(dateTaken, @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").Success)
                         return DateTime.ParseExact(dateTaken, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                     else
                         return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
@@ -282,6 +306,9 @@ static DateTime GetDateTakenFromImage(string path)
             }
 
         }
+
+
+
     }
     catch (System.ArgumentException ex)
     {
@@ -296,8 +323,47 @@ static DateTime GetDateTakenFromImage(string path)
     
 }
 
+static DateTime DateFromImage(string file)
+{
+    try
+    {
+        using (var myImage = System.Drawing.Image.FromFile(file))
+        {
+            PropertyItem propItem = myImage.GetPropertyItem(306);
+            DateTime dtaken;
+
+            //Convert date taken metadata to a DateTime object
+            string sdate = Encoding.UTF8.GetString(propItem.Value).Trim();
+            string secondhalf = sdate.Substring(sdate.IndexOf(" "), (sdate.Length - sdate.IndexOf(" ")));
+            string firsthalf = sdate.Substring(0, 10);
+            firsthalf = firsthalf.Replace(":", "-");
+            sdate = firsthalf + secondhalf;
+            dtaken = DateTime.Parse(sdate);
+            return dtaken;
+        }
+    }
+    catch (System.OutOfMemoryException)
+    {
+        return DateTime.MinValue;
+    }
+    catch (System.ArgumentException)
+    {
+        return DateTime.MinValue;
+    }
+    catch (Exception ex)
+    {
+        ConsoleWriteLine(ex.ToString(), true, ConsoleColor.Yellow);
+        return DateTime.MinValue;
+    }
+}
+
 static DateTime DateFromJson(string file)
 {
+
+    DateTime dt = DateFromImage(file);
+    if (dt != DateTime.MinValue)
+        return dt;
+
     string jsonFile = file + ".json";
     if (File.Exists(jsonFile))
     {
@@ -323,7 +389,42 @@ static DateTime DateFromJson(string file)
             return UnixTimeStampToDateTime(timeStamp);
         }
     }
+    else if (Path.GetFileNameWithoutExtension(file).EndsWith("(2)"))
+    {
+        jsonFile = Path.Combine(spath, Path.GetFileNameWithoutExtension(file).Replace("(2)", "") + Path.GetExtension(file) + "(1)" + ".json");
+        if (File.Exists(jsonFile))
+        {
+            string json = File.ReadAllText(jsonFile);
 
+            dynamic data = JObject.Parse(json);
+            double timeStamp = data.photoTakenTime.timestamp;
+            return UnixTimeStampToDateTime(timeStamp);
+        }
+    }
+    else 
+    {
+        jsonFile = Path.Combine(spath, Path.GetFileName(file) + "(1)" + ".json");
+        if (File.Exists(jsonFile))
+        {
+            string json = File.ReadAllText(jsonFile);
+
+            dynamic data = JObject.Parse(json);
+            double timeStamp = data.photoTakenTime.timestamp;
+            return UnixTimeStampToDateTime(timeStamp);
+        }
+        else
+        {
+            jsonFile = Path.Combine(spath, Path.GetFileNameWithoutExtension(file) + ".JPG" + ".json");
+            if (File.Exists(jsonFile))
+            {
+                string json = File.ReadAllText(jsonFile);
+
+                dynamic data = JObject.Parse(json);
+                double timeStamp = data.photoTakenTime.timestamp;
+                return UnixTimeStampToDateTime(timeStamp);
+            }
+        }
+    }
 
     jsonFile = Path.Combine(spath, "metadata.json");
     if (File.Exists(jsonFile))
@@ -335,7 +436,11 @@ static DateTime DateFromJson(string file)
         double timeStamp = data.date.timestamp;
         return UnixTimeStampToDateTime(timeStamp);
     }
-    return DateTime.MinValue;
+
+    dt = DateTime.MinValue;
+    DateTime.TryParse(Path.GetFileNameWithoutExtension(file).Replace(".",":"), out dt);
+
+    return dt;
 }
 
 static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
