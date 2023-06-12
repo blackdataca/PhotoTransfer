@@ -64,6 +64,7 @@ foreach (var sourceFile in allFiles)
         skipped++;
         continue;
     }
+
     if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
         || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
         || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
@@ -86,6 +87,14 @@ foreach (var sourceFile in allFiles)
             ConsoleWriteLine(" not found", true, ConsoleColor.Red);
             continue;
         }
+
+        bool isArchive = (File.GetAttributes(sourceFile) & FileAttributes.Archive) == FileAttributes.Archive;
+        if (!isArchive)
+        {
+            ConsoleWriteLine(" already processed", true, ConsoleColor.Yellow);
+            continue;
+        }
+
         long sourceLen = new FileInfo(sourceFile).Length;
         ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
 
@@ -96,6 +105,7 @@ foreach (var sourceFile in allFiles)
             {
                 ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Red);
                 skipped++;
+                File.SetAttributes(sourceFile, File.GetAttributes(sourceFile) & ~FileAttributes.Archive);
                 continue;
             }
         }
@@ -122,6 +132,7 @@ foreach (var sourceFile in allFiles)
         {
             ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
             skipped++;
+            File.SetAttributes(sourceFile, File.GetAttributes(sourceFile) & ~FileAttributes.Archive);
             continue;
         }
 
@@ -161,6 +172,7 @@ foreach (var sourceFile in allFiles)
             {
                 ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
                 skipped++;
+                File.SetAttributes(sourceFile, File.GetAttributes(sourceFile) & ~FileAttributes.Archive);
                 continue;
             }
             
@@ -228,6 +240,11 @@ foreach (var sourceFile in allFiles)
             else
                 ConsoleWrite("copied", true, ConsoleColor.Green);
             ConsoleWriteLine($" {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
+
+            if (File.Exists(sourceFile))
+            {
+                File.SetAttributes(sourceFile, File.GetAttributes(sourceFile) & ~FileAttributes.Archive);
+            }
             total++;
         }
         else
