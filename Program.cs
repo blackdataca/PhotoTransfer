@@ -11,207 +11,247 @@ using System.Linq.Expressions;
 using Newtonsoft.Json.Linq;
 using System.Drawing;
 using System.Windows.Media.Imaging;
+using System.Diagnostics;
+using System.CodeDom.Compiler;
 
-ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName  + " " + Assembly.GetExecutingAssembly().GetName().Version) ;
+ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName + " " + Assembly.GetExecutingAssembly().GetName().Version);
 
-if (args.Length == 3)
+if (args.Length != 3)
 {
-    string sourceRoot = args[0];
-    string targetRoot = args[1];
-    bool deleteSource = bool.Parse(args[2]);
+    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir if_Delete_Source");
+    return;
+}
 
-    if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
-        targetRoot+= Path.DirectorySeparatorChar;
-    if (!Directory.Exists(targetRoot))
-    {
-        ConsoleWriteLine($"target_dir does not exist: {targetRoot}");
-        return;
-    }
-    ConsoleWriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
-    Console.TreatControlCAsInput = true;
+string sourceRoot = args[0];
+if (!sourceRoot.EndsWith(Path.DirectorySeparatorChar))
+    sourceRoot += Path.DirectorySeparatorChar;
+string targetRoot = args[1];
+if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
+    targetRoot += Path.DirectorySeparatorChar;
 
-    int n = 0;
-    int total = 0;
-    int skipped = 0;
-    long sessionBytes = 0;
-    string[] allFiles = Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories);
-    foreach (var sourceFile in allFiles)
+bool deleteSource = bool.Parse(args[2]);
+
+
+if (!Directory.Exists(targetRoot))
+{
+    ConsoleWriteLine($"target_dir does not exist: {targetRoot}");
+    return;
+}
+ConsoleWriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
+Console.TreatControlCAsInput = true;
+
+int n = 0;
+int total = 0;
+int skipped = 0;
+long sessionBytes = 0;
+string[] allFiles = Directory.GetFiles(sourceRoot, "*.*", System.IO.SearchOption.AllDirectories);
+foreach (var sourceFile in allFiles)
+{
+    n++;
+    Thread.Sleep(1);
+    if (Console.KeyAvailable)
     {
-        n++;
-        Thread.Sleep(1);
-        if (Console.KeyAvailable)
+        var keyPressed = Console.ReadKey();
+        if (keyPressed.Key == ConsoleKey.Escape || keyPressed.Modifiers == ConsoleModifiers.Control && keyPressed.Key == ConsoleKey.C)
         {
-            var keyPressed = Console.ReadKey();
-            if (keyPressed.Key == ConsoleKey.Escape || keyPressed.Modifiers == ConsoleModifiers.Control && keyPressed.Key == ConsoleKey.C)
-            {
-                break;
-            }
+            break;
         }
-        string? p = Path.GetDirectoryName(sourceFile);
-        if (p == null || p.EndsWith("Trash"))
+    }
+    string? p = Path.GetDirectoryName(sourceFile);
+    if (p == null || p.EndsWith("Trash"))
+    {
+        //ConsoleWriteLine("source file deleted. skip", true);
+        skipped++;
+        continue;
+    }
+    if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".heic", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+        || sourceFile.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
+        )
+    {
+        if (deleteSource)
+            ConsoleWrite("Moving");
+        else
+            ConsoleWrite("Copying");
+        ConsoleWrite($" {n}/{allFiles.Length}: {sourceFile} ", true);
+        if (!File.Exists(sourceFile))
         {
-            //ConsoleWriteLine("source file deleted. skip", true);
-            skipped++;
+            ConsoleWriteLine(" not found", true, ConsoleColor.Red);
             continue;
         }
-        if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".heic", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
-            || sourceFile.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
-            )
-        {
-            if (deleteSource)
-                ConsoleWrite("Moving");
-            else
-                ConsoleWrite("Copying");
-            ConsoleWrite($" {n}/{allFiles.Length}: {sourceFile} ", true);
-            long sourceLen = new FileInfo(sourceFile).Length;
-            ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
+        long sourceLen = new FileInfo(sourceFile).Length;
+        ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
 
-            DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
-            if (creation == DateTime.MinValue)
+        DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
+        if (creation == DateTime.MinValue)
+        {
+            if (sourceRoot != targetRoot)
             {
-                //creation = File.GetCreationTime(sourceFile);
-                //if (creation > DateTime.Now.AddDays(-1))
-                //{
-                    ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Red);
-                    skipped++;
-                    continue;
-                //}
+                ConsoleWriteLine("no timestamp found. skip", true, ConsoleColor.Red);
+                skipped++;
+                continue;
             }
-            DateTime lastWrite = File.GetLastWriteTime(sourceFile);
+        }
+        DateTime lastWrite = File.GetLastWriteTime(sourceFile);
+        string targetFileNameOnly = Path.GetFileName(sourceFile);
+        string? targetDir = Path.GetDirectoryName(sourceFile);
+        if (targetDir == null)
+            targetDir = sourceRoot;
+        targetDir = targetDir.Replace(sourceRoot, targetRoot);
+        if (creation != DateTime.MinValue)
+        {
             string y = creation.ToString("yyyy");
             string m = creation.ToString("MM");
             string d = creation.ToString("yyyy_MM_dd");
-            string targetFileNameOnly = Path.GetFileName(sourceFile);
-            string targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
-            string targetFile = Path.Combine(targetDir, targetFileNameOnly);
-            
+            targetDir = targetRoot + y + Path.DirectorySeparatorChar + m + Path.DirectorySeparatorChar + d;
+        }
+        string targetFile = Path.Combine(targetDir, targetFileNameOnly);
 
 
-            ConsoleWrite($"to {targetFile} ", true);
 
-            if (targetFileNameOnly.StartsWith("."))
+        ConsoleWrite($"to {targetFile} ", true);
+
+        if (targetFileNameOnly.StartsWith("."))
+        {
+            ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
+            skipped++;
+            continue;
+        }
+
+        //if (!Directory.Exists(targetDir))
+        //    Directory.CreateDirectory(targetDir);
+
+        if (File.Exists(targetFile) && (sourceFile != targetFile))
+        {
+            long targetLen = new FileInfo(targetFile).Length;
+            ConsoleWrite($"({BytesToString(targetLen)}) ", true);
+            if (targetLen < sourceLen)
+                File.Delete(targetFile);
+            else
+            {
+                if (File.GetCreationTime(targetFile).Date == DateTime.Now.Date)
+                    File.Delete(targetFile);
+            }
+        }
+
+
+        if (!File.Exists(targetFile) || (sourceFile == targetFile))
+        {
+            ConsoleWrite("...", true);
+
+            string result = FfMpeg("ffprobe", $"-v error -select_streams v:0 -show_entries stream \"{sourceFile}\"");
+            if (result.IndexOf("side_data_type=Display Matrix") >0)
+            {
+                //rotate 180
+                ConsoleWrite("removing rotation ", true, ConsoleColor.Green);
+                string tempFile = Path.Combine(Path.GetDirectoryName(sourceFile), Path.GetFileNameWithoutExtension(sourceFile) + "fix" + Path.GetExtension(sourceFile));
+                FfMpeg("ffmpeg",$"-i \"{sourceFile}\" -metadata:s:v:0 rotate=0 \"{tempFile}\" -y");
+                File.Delete(sourceFile);
+                File.Move(tempFile, sourceFile, false);
+                //ConsoleWrite("removed rotation, ", true, ConsoleColor.Green);
+            }
+            if (sourceRoot == targetRoot)
             {
                 ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
                 skipped++;
                 continue;
             }
-
+            
             if (!Directory.Exists(targetDir))
                 Directory.CreateDirectory(targetDir);
 
-            if (File.Exists(targetFile))
-            {
-                long targetLen = new FileInfo(targetFile).Length;
-                ConsoleWrite($"({BytesToString(targetLen)}) ", true);
-                if (targetLen < sourceLen)
-                    File.Delete(targetFile);
-                else
-                {
-                    if (File.GetCreationTime(targetFile).Date == DateTime.Now.Date)
-                        File.Delete(targetFile);
-                }
-            }
-
-
-            if (!File.Exists(targetFile))
-            {
-                ConsoleWrite("...", true);
-
-
-                if (deleteSource && sourceFile.Substring(0, 2).Equals(targetFile.Substring(0, 2), StringComparison.OrdinalIgnoreCase))
-                    File.Move(sourceFile, targetFile, false);
-                else
-                {
-                    byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
-                    using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
-                    {
-                        //long fileLength = source.Length;
-                        using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
-                        {
-                            long totalBytes = 0;
-                            int currentBlockSize = 0;
-                            //int lastPer = 0;
-                            var start = DateTime.Now;
-                            while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
-                            {
-                                dest.Write(buffer, 0, currentBlockSize);
-
-                                totalBytes += currentBlockSize;
-                                int percentage = (int)(totalBytes * 100 / sourceLen);
-
-                                //if (percentage != lastPer)
-                                //{
-                                //lastPer = percentage;
-                                var totalSeconds = DateTime.Now - start;
-                                int eta = 0; //seconds
-                                if (totalSeconds.TotalSeconds != 0)
-                                {
-                                    var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
-                                    var remaind = sourceLen - totalBytes;
-                                    eta = (int)(remaind / speed);
-
-                                }
-                                string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
-                                StringBuilder bs = new StringBuilder();
-                                for (int i = 0; i < per.Length; i++)
-                                    bs.Append("\b");
-                                ConsoleWrite($"{per}{bs}", true);
-                                Thread.Sleep(1);
-                                //}
-
-
-                            }
-                        }
-                    }
-
-                    if (deleteSource)
-                        File.Delete(sourceFile);
-                }
-                File.SetCreationTime(targetFile, creation);
-                File.SetLastWriteTime(targetFile, lastWrite);
-
-                long len = new FileInfo(targetFile).Length;
-                sessionBytes += len;
-                if (deleteSource)
-                    ConsoleWrite("moved", true, ConsoleColor.Green);
-                else
-                    ConsoleWrite("copied", true, ConsoleColor.Green);
-                ConsoleWriteLine($" {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
-                total++;
-            }
+            if (deleteSource && sourceFile.Substring(0, 2).Equals(targetFile.Substring(0, 2), StringComparison.OrdinalIgnoreCase))
+                File.Move(sourceFile, targetFile, false);
             else
             {
-                ConsoleWriteLine("exist", true, ConsoleColor.Yellow);
-                if (deleteSource)
+                byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+                using (FileStream source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
                 {
-                    File.Delete(sourceFile);
+                    //long fileLength = source.Length;
+                    using (FileStream dest = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write))
+                    {
+                        long totalBytes = 0;
+                        int currentBlockSize = 0;
+                        //int lastPer = 0;
+                        var start = DateTime.Now;
+                        while ((currentBlockSize = source.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            dest.Write(buffer, 0, currentBlockSize);
+
+                            totalBytes += currentBlockSize;
+                            int percentage = (int)(totalBytes * 100 / sourceLen);
+
+                            //if (percentage != lastPer)
+                            //{
+                            //lastPer = percentage;
+                            var totalSeconds = DateTime.Now - start;
+                            int eta = 0; //seconds
+                            if (totalSeconds.TotalSeconds != 0)
+                            {
+                                var speed = totalBytes / totalSeconds.TotalSeconds; // B/s
+                                var remaind = sourceLen - totalBytes;
+                                eta = (int)(remaind / speed);
+
+                            }
+                            string per = $"{percentage:N0}% -{HumanTime(eta)}   ";
+                            StringBuilder bs = new StringBuilder();
+                            for (int i = 0; i < per.Length; i++)
+                                bs.Append("\b");
+                            ConsoleWrite($"{per}{bs}", true);
+                            Thread.Sleep(1);
+                            //}
+
+
+                        }
+                    }
                 }
-                skipped++;
+
+                if (deleteSource)
+                    File.Delete(sourceFile);
             }
+            if (creation != DateTime.MinValue)
+                File.SetCreationTime(targetFile, creation);
+            if (lastWrite != DateTime.MinValue)
+                File.SetLastWriteTime(targetFile, lastWrite);
+
+            long len = new FileInfo(targetFile).Length;
+            sessionBytes += len;
+            if (deleteSource)
+                ConsoleWrite("moved", true, ConsoleColor.Green);
+            else
+                ConsoleWrite("copied", true, ConsoleColor.Green);
+            ConsoleWriteLine($" {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
+            total++;
         }
         else
         {
-            //ConsoleWriteLine($"Skip {n}/{allFiles.Length}: {sourceFile}", false, ConsoleColor.Yellow);
+            ConsoleWriteLine("exist", true, ConsoleColor.Yellow);
+            if (deleteSource && (sourceFile != targetFile))
+            {
+                File.Delete(sourceFile);
+            }
             skipped++;
         }
     }
-    ConsoleWriteLine($"Copied {total:N0} files, skipped {skipped:N0} files, {BytesToString(sessionBytes)} transferred", false, ConsoleColor.White);
-
+    else
+    {
+        //ConsoleWriteLine($"Skip {n}/{allFiles.Length}: {sourceFile}", false, ConsoleColor.Yellow);
+        skipped++;
+    }
 }
-else
-{
-    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir if_Delete_Source");
-}
+ConsoleWriteLine($"Copied {total:N0} files, skipped {skipped:N0} files, {BytesToString(sessionBytes)} transferred", false, ConsoleColor.White);
 
-static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor color= ConsoleColor.Gray)
+
+
+
+static void ConsoleWriteLine(string message, bool omitDate = false, ConsoleColor color = ConsoleColor.Gray)
 {
     Console.ForegroundColor = color;
     if (!omitDate)
@@ -254,7 +294,7 @@ static DateTime GetDateTakenFromImage(string path)
 {
     try
     {
-        if (path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) 
+        if (path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
              || path.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
@@ -320,7 +360,7 @@ static DateTime GetDateTakenFromImage(string path)
             throw ex;
     }
 
-    
+
 }
 
 static DateTime DateFromImage(string file)
@@ -401,7 +441,7 @@ static DateTime DateFromJson(string file)
             return UnixTimeStampToDateTime(timeStamp);
         }
     }
-    else 
+    else
     {
         jsonFile = Path.Combine(spath, Path.GetFileName(file) + "(1)" + ".json");
         if (File.Exists(jsonFile))
@@ -438,7 +478,7 @@ static DateTime DateFromJson(string file)
     }
 
     dt = DateTime.MinValue;
-    DateTime.TryParse(Path.GetFileNameWithoutExtension(file).Replace(".",":"), out dt);
+    DateTime.TryParse(Path.GetFileNameWithoutExtension(file).Replace(".", ":"), out dt);
 
     return dt;
 }
@@ -449,4 +489,24 @@ static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
     DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
     dateTime = dateTime.AddSeconds(unixTimeStamp).ToLocalTime();
     return dateTime;
+}
+
+static string FfMpeg(string app, string parameters)
+{
+    string result = String.Empty;
+
+    using (Process p = new Process())
+    {
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.CreateNoWindow = true;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.StartInfo.FileName = $"C:\\Program Files\\ffmpeg\\bin\\{app}.exe";
+        p.StartInfo.Arguments = parameters;
+        p.Start();
+        p.WaitForExit();
+
+        result = p.StandardOutput.ReadToEnd();
+    }
+
+    return result;
 }
