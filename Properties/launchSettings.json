@@ -2,7 +2,7 @@
   "profiles": {
     "PhotoTransfer": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Users\\user202212\\Resilio Sync\\Pictures\" \"C:\\Users\\user202212\\Resilio Sync\\Pictures\" true"
+      "commandLineArgs": "\"C:\\Users\\user202212\\Resilio Sync\\Pictures\" \"D:\\Pictures\" -move false -size \">1KB<1GB\""
     }
   }
 }

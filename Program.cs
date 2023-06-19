@@ -16,11 +16,13 @@ using System.CodeDom.Compiler;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName + " " + Assembly.GetExecutingAssembly().GetName().Version);
 
-if (args.Length != 3)
+if (args.Length < 3)
 {
-    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir if_Delete_Source");
+    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir -move true|false [-size >n<N]");
     return;
 }
+
+
 
 string sourceRoot = args[0];
 if (!sourceRoot.EndsWith(Path.DirectorySeparatorChar))
@@ -29,8 +31,28 @@ string targetRoot = args[1];
 if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
     targetRoot += Path.DirectorySeparatorChar;
 
-bool deleteSource = bool.Parse(args[2]);
+bool deleteSource = true;
+if (args.Contains("-move"))
+    deleteSource = bool.Parse(args[Array.IndexOf(args, "-move") + 1]);
 
+long maxSize = long.MaxValue;
+long minSize = long.MinValue;
+if (args.Contains("-size"))
+{
+    string customSize = args[Array.IndexOf(args, "-size") + 1];
+    string pattern = @">(.*)<(.*)";
+
+    Match match = Regex.Match(customSize, pattern);
+
+    if (match.Success)
+    {
+        string min = match.Groups[1].Value;
+        minSize = HumanToBytes(min);
+        string max = match.Groups[2].Value;
+        maxSize = HumanToBytes(max);
+        Console.WriteLine($">{min}:{minSize:N0} <{max}:{maxSize:N0}");
+    }
+}
 
 if (!Directory.Exists(targetRoot))
 {
@@ -81,7 +103,7 @@ foreach (var sourceFile in allFiles)
             ConsoleWrite("Moving");
         else
             ConsoleWrite("Copying");
-        ConsoleWrite($" {n}/{allFiles.Length}: {sourceFile} ", true);
+        ConsoleWrite($" {n:N0}/{allFiles.Length:N0}: {sourceFile} ", true);
         if (!File.Exists(sourceFile))
         {
             ConsoleWriteLine(" not found", true, ConsoleColor.Red);
@@ -96,7 +118,12 @@ foreach (var sourceFile in allFiles)
         }
 
         long sourceLen = new FileInfo(sourceFile).Length;
-        ConsoleWrite($"({BytesToString(sourceLen)}) ", true);
+        ConsoleWrite($"({BytesToHuman(sourceLen)}) ", true);
+        if (sourceLen < minSize || sourceLen>maxSize)
+        {
+            ConsoleWriteLine("wrong size", true, ConsoleColor.Yellow);
+            continue;
+        }
 
         DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
         if (creation == DateTime.MinValue)
@@ -142,7 +169,7 @@ foreach (var sourceFile in allFiles)
         if (File.Exists(targetFile) && (sourceFile != targetFile))
         {
             long targetLen = new FileInfo(targetFile).Length;
-            ConsoleWrite($"({BytesToString(targetLen)}) ", true);
+            ConsoleWrite($"({BytesToHuman(targetLen)}) ", true);
             if (targetLen < sourceLen)
                 File.Delete(targetFile);
             else
@@ -239,7 +266,7 @@ foreach (var sourceFile in allFiles)
                 ConsoleWrite("moved", true, ConsoleColor.Green);
             else
                 ConsoleWrite("copied", true, ConsoleColor.Green);
-            ConsoleWriteLine($" {BytesToString(len)} session: {BytesToString(sessionBytes)}", true, ConsoleColor.Green);
+            ConsoleWriteLine($" {BytesToHuman(len)} session: {BytesToHuman(sessionBytes)}", true, ConsoleColor.Green);
 
             if (File.Exists(sourceFile))
             {
@@ -263,7 +290,7 @@ foreach (var sourceFile in allFiles)
         skipped++;
     }
 }
-ConsoleWriteLine($"Copied {total:N0} files, skipped {skipped:N0} files, {BytesToString(sessionBytes)} transferred", false, ConsoleColor.White);
+ConsoleWriteLine($"Copied {total:N0} files, skipped {skipped:N0} files, {BytesToHuman(sessionBytes)} transferred", false, ConsoleColor.White);
 
 
 
@@ -295,7 +322,7 @@ static string HumanTime(double seconds)
     sb.Append(t.Seconds).Append("s");
     return sb.ToString();
 }
-static String BytesToString(long byteCount)
+static String BytesToHuman(long byteCount)
 {
     string[] suf = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; //Longs run out around EB
     if (byteCount == 0)
@@ -306,6 +333,42 @@ static String BytesToString(long byteCount)
     return (Math.Sign(byteCount) * num).ToString() + suf[place];
 }
 
+static long HumanToBytes(string sizeString)
+{
+    string pattern = @"^(\d+(\.\d+)?)\s*([KMGTP]B)$";
+
+    Match match = Regex.Match(sizeString, pattern, RegexOptions.IgnoreCase);
+
+    if (match.Success)
+    {
+        double value = double.Parse(match.Groups[1].Value);
+        string unit = match.Groups[3].Value.ToUpper();
+
+        long bytes = (long)(value * GetMultiplier(unit));
+        return bytes;
+    }
+
+    throw new ArgumentException("Invalid size format.");
+}
+
+static long GetMultiplier(string unit)
+{
+    switch (unit.ToUpper())
+    {
+        case "KB":
+            return 1024;
+        case "MB":
+            return 1024 * 1024;
+        case "GB":
+            return 1024 * 1024 * 1024;
+        case "TB":
+            return 1024L * 1024 * 1024 * 1024;
+        case "PB":
+            return 1024L * 1024 * 1024 * 1024 * 1024;
+        default:
+            throw new ArgumentException("Invalid size unit.");
+    }
+}
 
 static DateTime GetDateTakenFromImage(string path)
 {
