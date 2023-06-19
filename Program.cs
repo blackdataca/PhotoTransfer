@@ -80,9 +80,8 @@ foreach (var sourceFile in allFiles)
         }
     }
     string? p = Path.GetDirectoryName(sourceFile);
-    if (p == null || p.EndsWith("Trash"))
+    if (p == null || p.EndsWith("Trash") || p.IndexOf("\\.")>0)
     {
-        //ConsoleWriteLine("source file deleted. skip", true);
         skipped++;
         continue;
     }
@@ -113,7 +112,7 @@ foreach (var sourceFile in allFiles)
         bool isArchive = (File.GetAttributes(sourceFile) & FileAttributes.Archive) == FileAttributes.Archive;
         if (!isArchive)
         {
-            ConsoleWriteLine(" already processed", true, ConsoleColor.Yellow);
+            ConsoleWriteLine(" no archive bit", true, ConsoleColor.Yellow);
             continue;
         }
 
@@ -126,7 +125,7 @@ foreach (var sourceFile in allFiles)
         }
 
         DateTime creation = GetDateTakenFromImage(sourceFile); // File.GetCreationTime(sourceFile);
-        if (creation == DateTime.MinValue)
+        if (creation == DateTime.MinValue || creation.Year<2000)
         {
             if (sourceRoot != targetRoot)
             {
@@ -137,6 +136,8 @@ foreach (var sourceFile in allFiles)
             }
         }
         DateTime lastWrite = File.GetLastWriteTime(sourceFile);
+        if (lastWrite < creation)
+            lastWrite = creation;
         string targetFileNameOnly = Path.GetFileName(sourceFile);
         string? targetDir = Path.GetDirectoryName(sourceFile);
         if (targetDir == null)
@@ -258,7 +259,7 @@ foreach (var sourceFile in allFiles)
             if (creation != DateTime.MinValue)
                 File.SetCreationTime(targetFile, creation);
             if (lastWrite != DateTime.MinValue)
-                File.SetLastWriteTime(targetFile, lastWrite);
+               File.SetLastWriteTime(targetFile, lastWrite);
 
             long len = new FileInfo(targetFile).Length;
             sessionBytes += len;
@@ -266,7 +267,7 @@ foreach (var sourceFile in allFiles)
                 ConsoleWrite("moved", true, ConsoleColor.Green);
             else
                 ConsoleWrite("copied", true, ConsoleColor.Green);
-            ConsoleWriteLine($" {BytesToHuman(len)} session: {BytesToHuman(sessionBytes)}", true, ConsoleColor.Green);
+            ConsoleWriteLine($" {BytesToHuman(len)} session {BytesToHuman(sessionBytes)}", true, ConsoleColor.Green);
 
             if (File.Exists(sourceFile))
             {
