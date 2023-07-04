@@ -15,10 +15,12 @@ using System.Diagnostics;
 using System.CodeDom.Compiler;
 
 ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName + " " + Assembly.GetExecutingAssembly().GetName().Version);
+string[] imageFileExtensions = { ".jpg", ".heic", ".jpeg", ".png" };
+string[] videoFileExtensions = { ".mp4", ".mov", ".m4v", ".flv", ".mts", ".avi" };
 
 if (args.Length < 3)
 {
-    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir -move true|false [-size >n<N]");
+    ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir -move true|false [-imageSize >n<N] [-videoSize >n<N]");
     return;
 }
 
@@ -35,31 +37,22 @@ bool deleteSource = true;
 if (args.Contains("-move"))
     deleteSource = bool.Parse(args[Array.IndexOf(args, "-move") + 1]);
 
-long maxSize = long.MaxValue;
-long minSize = long.MinValue;
-if (args.Contains("-size"))
-{
-    string customSize = args[Array.IndexOf(args, "-size") + 1];
-    string pattern = @">(.*)<(.*)";
+long maxImageSize = long.MaxValue;
+long minImageSize = long.MinValue;
 
-    Match match = Regex.Match(customSize, pattern);
+GetSizes(args, "-imageSize", ref maxImageSize, ref minImageSize);
 
-    if (match.Success)
-    {
-        string min = match.Groups[1].Value;
-        minSize = HumanToBytes(min);
-        string max = match.Groups[2].Value;
-        maxSize = HumanToBytes(max);
-        Console.WriteLine($">{min}:{minSize:N0} <{max}:{maxSize:N0}");
-    }
-}
+long maxVideoSize = long.MaxValue;
+long minVideoSize = long.MinValue;
+
+GetSizes(args, "-videoSize", ref maxVideoSize, ref minVideoSize);
 
 if (!Directory.Exists(targetRoot))
 {
     ConsoleWriteLine($"target_dir does not exist: {targetRoot}");
     return;
 }
-ConsoleWriteLine($"PhotoTransfer from {sourceRoot} to {targetRoot}");
+ConsoleWriteLine($"PhotoTransfer {(deleteSource?"move":"copy")} from {sourceRoot} to {targetRoot}");
 Console.TreatControlCAsInput = true;
 
 int n = 0;
@@ -85,18 +78,8 @@ foreach (var sourceFile in allFiles)
         skipped++;
         continue;
     }
-
-    if (sourceFile.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".flv", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".heic", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
-        || sourceFile.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
-        )
+    string ext = Path.GetExtension(sourceFile).ToLower();
+    if (imageFileExtensions.Contains(ext) || videoFileExtensions.Contains(ext)) 
     {
         if (deleteSource)
             ConsoleWrite("Moving");
@@ -118,7 +101,8 @@ foreach (var sourceFile in allFiles)
 
         long sourceLen = new FileInfo(sourceFile).Length;
         ConsoleWrite($"({BytesToHuman(sourceLen)}) ", true);
-        if (sourceLen < minSize || sourceLen>maxSize)
+        if (imageFileExtensions.Contains(ext) && ( sourceLen < minImageSize || sourceLen>maxImageSize) ||
+             videoFileExtensions.Contains(ext) && (sourceLen < minVideoSize || sourceLen > maxVideoSize))
         {
             ConsoleWriteLine("wrong size", true, ConsoleColor.Yellow);
             continue;
@@ -590,4 +574,24 @@ static string FfMpeg(string app, string parameters)
     }
 
     return result;
+}
+
+static void GetSizes(string[] args, string para, ref long maxSize, ref long minSize)
+{
+    if (args.Contains(para))
+    {
+        string customSize = args[Array.IndexOf(args, para) + 1];
+        string pattern = @">(.*)<(.*)";
+
+        Match match = Regex.Match(customSize, pattern);
+
+        if (match.Success)
+        {
+            string min = match.Groups[1].Value;
+            minSize = HumanToBytes(min);
+            string max = match.Groups[2].Value;
+            maxSize = HumanToBytes(max);
+            Console.WriteLine($">{min}:{minSize:N0} <{max}:{maxSize:N0}");
+        }
+    }
 }
