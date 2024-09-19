@@ -174,7 +174,8 @@ foreach (var sourceFile in allFiles)
             {
                 //rotate 180
                 ConsoleWrite("removing rotation ", true, ConsoleColor.Green);
-                string tempFile = Path.Combine(Path.GetDirectoryName(sourceFile), Path.GetFileNameWithoutExtension(sourceFile) + "fix" + Path.GetExtension(sourceFile));
+                string path1 = Path.GetDirectoryName(sourceFile)??"";
+                string tempFile = Path.Combine(path1, Path.GetFileNameWithoutExtension(sourceFile) + "fix" + Path.GetExtension(sourceFile));
                 FfMpeg("ffmpeg",$"-i \"{sourceFile}\" -metadata:s:v:0 rotate=0 \"{tempFile}\" -y");
                 File.Delete(sourceFile);
                 File.Move(tempFile, sourceFile, false);
@@ -422,7 +423,7 @@ static DateTime GetDateTakenFromImage(string path)
             return DateFromJson(path);
         }
         else
-            throw ex;
+            throw;
     }
 
 
@@ -434,16 +435,19 @@ static DateTime DateFromImage(string file)
     {
         using (var myImage = System.Drawing.Image.FromFile(file))
         {
-            PropertyItem propItem = myImage.GetPropertyItem(306);
-            DateTime dtaken;
+            DateTime dtaken = DateTime.MinValue;
+            if (myImage.GetPropertyItem(306) != null)
+            {
+                PropertyItem propItem = myImage.GetPropertyItem(306);
 
-            //Convert date taken metadata to a DateTime object
-            string sdate = Encoding.UTF8.GetString(propItem.Value).Trim();
-            string secondhalf = sdate.Substring(sdate.IndexOf(" "), (sdate.Length - sdate.IndexOf(" ")));
-            string firsthalf = sdate.Substring(0, 10);
-            firsthalf = firsthalf.Replace(":", "-");
-            sdate = firsthalf + secondhalf;
-            dtaken = DateTime.Parse(sdate);
+                //Convert date taken metadata to a DateTime object
+                string sdate = Encoding.UTF8.GetString(propItem.Value).Trim();
+                string secondhalf = sdate.Substring(sdate.IndexOf(" "), (sdate.Length - sdate.IndexOf(" ")));
+                string firsthalf = sdate.Substring(0, 10);
+                firsthalf = firsthalf.Replace(":", "-");
+                sdate = firsthalf + secondhalf;
+                dtaken = DateTime.Parse(sdate);
+            }
             return dtaken;
         }
     }
