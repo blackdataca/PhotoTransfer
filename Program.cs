@@ -18,7 +18,7 @@ ConsoleWriteLine(AppDomain.CurrentDomain.FriendlyName + " " + Assembly.GetExecut
 string[] imageFileExtensions = { ".jpg", ".heic", ".jpeg", ".png" };
 string[] videoFileExtensions = { ".mp4", ".mov", ".m4v", ".flv", ".mts", ".avi" };
 
-if (args.Length < 3)
+if (args.Length < 2)
 {
     ConsoleWriteLine("Arguments: PhotoTransfer.exe source_dir target_dir -move true|false [-imageSize >n<N] [-videoSize >n<N]");
     return;
@@ -29,6 +29,7 @@ if (args.Length < 3)
 string sourceRoot = args[0];
 if (!sourceRoot.EndsWith(Path.DirectorySeparatorChar))
     sourceRoot += Path.DirectorySeparatorChar;
+
 string targetRoot = args[1];
 if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
     targetRoot += Path.DirectorySeparatorChar;
@@ -36,6 +37,8 @@ if (!targetRoot.EndsWith(Path.DirectorySeparatorChar))
 bool deleteSource = true;
 if (args.Contains("-move"))
     deleteSource = bool.Parse(args[Array.IndexOf(args, "-move") + 1]);
+
+ConsoleWriteLine($"{(deleteSource?"Move":"Copy")} from {sourceRoot} to {targetRoot}...");
 
 long maxImageSize = long.MaxValue;
 long minImageSize = long.MinValue;
@@ -92,11 +95,14 @@ foreach (var sourceFile in allFiles)
             continue;
         }
 
-        bool isArchive = (File.GetAttributes(sourceFile) & FileAttributes.Archive) == FileAttributes.Archive;
-        if (!isArchive)
+        if (sourceRoot == targetRoot)
         {
-            ConsoleWriteLine(" no archive bit", true, ConsoleColor.Yellow);
-            continue;
+            bool isArchive = (File.GetAttributes(sourceFile) & FileAttributes.Archive) == FileAttributes.Archive;
+            if (!isArchive)
+            {
+                ConsoleWriteLine(" no archive bit", true, ConsoleColor.Yellow);
+                continue;
+            }
         }
 
         long sourceLen = new FileInfo(sourceFile).Length;
@@ -169,18 +175,18 @@ foreach (var sourceFile in allFiles)
         {
             ConsoleWrite("...", true);
 
-            string result = FfMpeg("ffprobe", $"-v error -select_streams v:0 -show_entries stream \"{sourceFile}\"");
-            if (result.IndexOf("side_data_type=Display Matrix") >0)
-            {
-                //rotate 180
-                ConsoleWrite("removing rotation ", true, ConsoleColor.Green);
-                string path1 = Path.GetDirectoryName(sourceFile)??"";
-                string tempFile = Path.Combine(path1, Path.GetFileNameWithoutExtension(sourceFile) + "fix" + Path.GetExtension(sourceFile));
-                FfMpeg("ffmpeg",$"-i \"{sourceFile}\" -metadata:s:v:0 rotate=0 \"{tempFile}\" -y");
-                File.Delete(sourceFile);
-                File.Move(tempFile, sourceFile, false);
-                //ConsoleWrite("removed rotation, ", true, ConsoleColor.Green);
-            }
+            //string result = FfMpeg("ffprobe", $"-v error -select_streams v:0 -show_entries stream \"{sourceFile}\"");
+            //if (result.IndexOf("side_data_type=Display Matrix") >0)
+            //{
+            //    //rotate 180
+            //    ConsoleWrite("removing rotation ", true, ConsoleColor.Green);
+            //    string path1 = Path.GetDirectoryName(sourceFile)??"";
+            //    string tempFile = Path.Combine(path1, Path.GetFileNameWithoutExtension(sourceFile) + "fix" + Path.GetExtension(sourceFile));
+            //    FfMpeg("ffmpeg",$"-i \"{sourceFile}\" -metadata:s:v:0 rotate=0 \"{tempFile}\" -y");
+            //    File.Delete(sourceFile);
+            //    File.Move(tempFile, sourceFile, false);
+            //    //ConsoleWrite("removed rotation, ", true, ConsoleColor.Green);
+            //}
             if (sourceRoot == targetRoot)
             {
                 ConsoleWriteLine("skip", true, ConsoleColor.Yellow);
@@ -360,96 +366,96 @@ static DateTime GetDateTakenFromImage(string path)
 {
     try
     {
-        if (path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
-             || path.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
-            )
+        using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
         {
-            using (ShellObject shell = ShellObject.FromParsingName(path))
+            using (var myImage = System.Drawing.Image.FromStream(fs, false, false))
             {
-                var v = shell.Properties.System.Media.DateEncoded.Value;
-                if (v == null)
+                PropertyItem? propItem = myImage.GetPropertyItem(36867);
+                if (propItem == null || propItem.Value == null)
+                    return DateFromJson(path);
+                string dateTaken = Encoding.ASCII.GetString(propItem.Value);
+                dateTaken = dateTaken.Replace("?", "");
+                dateTaken = dateTaken.Trim('\0').Trim();
+
+                if (Regex.Match(dateTaken, @"^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
                 {
-                    //return DateFromJson(path);
-                    //ConsoleWriteLine("Error reading date", true, ConsoleColor.Red);
-                    return DateTime.MinValue;
+                    var regex = new Regex(Regex.Escape(":"));
+                    dateTaken = regex.Replace(dateTaken, "-", 2);
+                    return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
+                    //return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
                 }
+                else if (Regex.Match(dateTaken, @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").Success)
+                    return DateTime.ParseExact(dateTaken, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                 else
-                {
-                    DateTime datetime = v.Value;
-                    return datetime;
-                }
+                    return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
             }
-
         }
-        else
-        {
-
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
-            {
-                using (var myImage = System.Drawing.Image.FromStream(fs, false, false))
-                {
-                    PropertyItem? propItem = myImage.GetPropertyItem(36867);
-                    if (propItem == null || propItem.Value == null)
-                        return DateFromJson(path);
-                    string dateTaken = Encoding.ASCII.GetString(propItem.Value);
-                    dateTaken = dateTaken.Replace("?", "");
-                    dateTaken = dateTaken.Trim('\0').Trim();
-
-                    if (Regex.Match(dateTaken, @"^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").Success)
-                    {
-                        var regex = new Regex(Regex.Escape(":"));
-                        dateTaken = regex.Replace(dateTaken, "-", 2);
-                        return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
-                        //return DateTime.ParseExact(dateTaken, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture);
-                    }
-                    else if (Regex.Match(dateTaken, @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").Success)
-                        return DateTime.ParseExact(dateTaken, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-                    else
-                        return DateTime.Parse(dateTaken, CultureInfo.InvariantCulture);
-                }
-            }
-
-        }
-
-
-
     }
     catch (System.ArgumentException ex)
     {
         if (ex.Message == "Property cannot be found." || ex.Message == "Parameter is not valid.")
         {
-            return DateFromJson(path);
         }
         else
             throw;
     }
 
+    //if (path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+    //        || path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+    //        || path.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase)
+    //         || path.EndsWith(".avi", StringComparison.OrdinalIgnoreCase)
+    //        )
+    //    {
+    using (ShellObject shell = ShellObject.FromParsingName(path))
+    {
+        var v = shell.Properties.System.Media.DateEncoded.Value;
+        if (v == null)
+        {
+            // Add to path .supplemental-metadata.json
+            string supplementalJson = path + ".supplemental-metadata.json";
+            if (!File.Exists(supplementalJson) && path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+            {
+                // Try .HEIC.supplemental-metadata.json if .MP4.supplemental-metadata.json does not exist
+                supplementalJson = Path.ChangeExtension(path, ".HEIC") + ".supplemental-metadata.json";
+            }
 
+            DateTime dateTime = DateFromJson(supplementalJson);
+            //ConsoleWriteLine("Error reading date", true, ConsoleColor.Red);
+            return dateTime;
+        }
+        else
+        {
+            DateTime datetime = v.Value;
+            return datetime;
+        }
+    }
 }
 
 static DateTime DateFromImage(string file)
 {
+    if (!File.Exists(file))
+        return DateTime.MinValue;
     try
     {
-        using (var myImage = System.Drawing.Image.FromFile(file))
-        {
-            DateTime dtaken = DateTime.MinValue;
-            if (myImage.GetPropertyItem(306) != null)
+       
+            using (var myImage = System.Drawing.Image.FromFile(file))
             {
-                PropertyItem propItem = myImage.GetPropertyItem(306);
+                DateTime dtaken = DateTime.MinValue;
+                if (myImage.GetPropertyItem(306) != null)
+                {
+                    PropertyItem propItem = myImage.GetPropertyItem(306);
 
-                //Convert date taken metadata to a DateTime object
-                string sdate = Encoding.UTF8.GetString(propItem.Value).Trim();
-                string secondhalf = sdate.Substring(sdate.IndexOf(" "), (sdate.Length - sdate.IndexOf(" ")));
-                string firsthalf = sdate.Substring(0, 10);
-                firsthalf = firsthalf.Replace(":", "-");
-                sdate = firsthalf + secondhalf;
-                dtaken = DateTime.Parse(sdate);
+                    //Convert date taken metadata to a DateTime object
+                    string sdate = Encoding.UTF8.GetString(propItem.Value).Trim();
+                    string secondhalf = sdate.Substring(sdate.IndexOf(" "), (sdate.Length - sdate.IndexOf(" ")));
+                    string firsthalf = sdate.Substring(0, 10);
+                    firsthalf = firsthalf.Replace(":", "-");
+                    sdate = firsthalf + secondhalf;
+                    dtaken = DateTime.Parse(sdate);
+                }
+                return dtaken;
             }
-            return dtaken;
-        }
+        
     }
     catch (System.OutOfMemoryException)
     {
@@ -473,7 +479,7 @@ static DateTime DateFromJson(string file)
     if (dt != DateTime.MinValue)
         return dt;
 
-    string jsonFile = file + ".json";
+    string jsonFile = file.EndsWith(".json")?file:file + ".json";
     if (File.Exists(jsonFile))
     {
         string json = File.ReadAllText(jsonFile);
@@ -560,25 +566,25 @@ static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
     return dateTime;
 }
 
-static string FfMpeg(string app, string parameters)
-{
-    string result = String.Empty;
+//static string FfMpeg(string app, string parameters)
+//{
+//    string result = String.Empty;
 
-    using (Process p = new Process())
-    {
-        p.StartInfo.UseShellExecute = false;
-        p.StartInfo.CreateNoWindow = true;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.StartInfo.FileName = $"C:\\Program Files\\ffmpeg\\bin\\{app}.exe";
-        p.StartInfo.Arguments = parameters;
-        p.Start();
-        p.WaitForExit();
+//    using (Process p = new Process())
+//    {
+//        p.StartInfo.UseShellExecute = false;
+//        p.StartInfo.CreateNoWindow = true;
+//        p.StartInfo.RedirectStandardOutput = true;
+//        p.StartInfo.FileName = $"C:\\Program Files\\ffmpeg\\bin\\{app}.exe";
+//        p.StartInfo.Arguments = parameters;
+//        p.Start();
+//        p.WaitForExit();
 
-        result = p.StandardOutput.ReadToEnd();
-    }
+//        result = p.StandardOutput.ReadToEnd();
+//    }
 
-    return result;
-}
+//    return result;
+//}
 
 static void GetSizes(string[] args, string para, ref long maxSize, ref long minSize)
 {
